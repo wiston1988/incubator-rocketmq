@@ -20,25 +20,18 @@
  */
 package org.apache.rocketmq.store;
 
+import java.io.File;
 import java.io.IOException;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+
+import org.apache.rocketmq.common.UtilAll;
+import org.junit.After;
 import org.junit.Test;
 
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class StoreCheckpointTest {
-    @BeforeClass
-    public static void setUpBeforeClass() throws Exception {
-
-    }
-
-    @AfterClass
-    public static void tearDownAfterClass() throws Exception {
-    }
-
     @Test
-    public void test_write_read() throws IOException {
+    public void testWriteAndRead() throws IOException {
         StoreCheckpoint storeCheckpoint = new StoreCheckpoint("target/checkpoint_test/0000");
         long physicMsgTimestamp = 0xAABB;
         long logicsMsgTimestamp = 0xCCDD;
@@ -47,10 +40,16 @@ public class StoreCheckpointTest {
         storeCheckpoint.flush();
 
         long diff = physicMsgTimestamp - storeCheckpoint.getMinTimestamp();
-        assertTrue(diff == 3000);
+        assertThat(diff).isEqualTo(3000);
         storeCheckpoint.shutdown();
         storeCheckpoint = new StoreCheckpoint("target/checkpoint_test/0000");
-        assertTrue(physicMsgTimestamp == storeCheckpoint.getPhysicMsgTimestamp());
-        assertTrue(logicsMsgTimestamp == storeCheckpoint.getLogicsMsgTimestamp());
+        assertThat(storeCheckpoint.getPhysicMsgTimestamp()).isEqualTo(physicMsgTimestamp);
+        assertThat(storeCheckpoint.getLogicsMsgTimestamp()).isEqualTo(logicsMsgTimestamp);
+    }
+
+    @After
+    public void destory() {
+        File file = new File("target/checkpoint_test");
+        UtilAll.deleteFile(file);
     }
 }

@@ -121,7 +121,7 @@ public class MappedFileQueue {
         this.deleteExpiredFile(willRemoveFiles);
     }
 
-    private void deleteExpiredFile(List<MappedFile> files) {
+    void deleteExpiredFile(List<MappedFile> files) {
 
         if (!files.isEmpty()) {
 
@@ -367,6 +367,9 @@ public class MappedFileQueue {
                     } else {
                         break;
                     }
+                } else {
+                    //avoid deleting files in the middle
+                    break;
                 }
             }
         }
@@ -397,6 +400,9 @@ public class MappedFileQueue {
                         log.info("physic min offset " + offset + ", logics in current mappedFile max offset "
                             + maxOffsetInLogicQueue + ", delete it");
                     }
+                } else if (!mappedFile.isAvailable()) { // Handle hanged file.
+                    log.warn("Found a hanged consume queue file, attempting to delete it.");
+                    destroy = true;
                 } else {
                     log.warn("this being not executed forever.");
                     break;
@@ -418,7 +424,7 @@ public class MappedFileQueue {
 
     public boolean flush(final int flushLeastPages) {
         boolean result = true;
-        MappedFile mappedFile = this.findMappedFileByOffset(this.flushedWhere, false);
+        MappedFile mappedFile = this.findMappedFileByOffset(this.flushedWhere, this.flushedWhere == 0);
         if (mappedFile != null) {
             long tmpTimeStamp = mappedFile.getStoreTimestamp();
             int offset = mappedFile.flush(flushLeastPages);
@@ -435,7 +441,7 @@ public class MappedFileQueue {
 
     public boolean commit(final int commitLeastPages) {
         boolean result = true;
-        MappedFile mappedFile = this.findMappedFileByOffset(this.committedWhere, false);
+        MappedFile mappedFile = this.findMappedFileByOffset(this.committedWhere, this.committedWhere == 0);
         if (mappedFile != null) {
             int offset = mappedFile.commit(commitLeastPages);
             long where = mappedFile.getFileFromOffset() + offset;

@@ -43,7 +43,7 @@ public class RemotingCommand {
     private static final Map<Class, String> CANONICAL_NAME_CACHE = new HashMap<Class, String>();
     // 1, Oneway
     // 1, RESPONSE_COMMAND
-    private static final Map<Field, Annotation> NOT_NULL_ANNOTATION_CACHE = new HashMap<Field, Annotation>();
+    private static final Map<Field, Boolean> NULLABLE_FIELD_CACHE = new HashMap<Field, Boolean>();
     private static final String STRING_CANONICAL_NAME = String.class.getCanonicalName();
     private static final String DOUBLE_CANONICAL_NAME_1 = Double.class.getCanonicalName();
     private static final String DOUBLE_CANONICAL_NAME_2 = double.class.getCanonicalName();
@@ -69,9 +69,6 @@ public class RemotingCommand {
         }
     }
 
-    /**
-
-     */
     private int code;
     private LanguageCode language = LanguageCode.JAVA;
     private int version = 0;
@@ -80,13 +77,9 @@ public class RemotingCommand {
     private String remark;
     private HashMap<String, String> extFields;
     private transient CommandCustomHeader customHeader;
-    /**
 
-     */
     private SerializeType serializeTypeCurrentRPC = serializeTypeConfigInThisServer;
-    /**
 
-     */
     private transient byte[] body;
 
     protected RemotingCommand() {
@@ -114,15 +107,11 @@ public class RemotingCommand {
     }
 
     public static RemotingCommand createResponseCommand(Class<? extends CommandCustomHeader> classHeader) {
-        RemotingCommand cmd = createResponseCommand(RemotingSysResponseCode.SYSTEM_ERROR, "not set any response code", classHeader);
-
-        return cmd;
+        return createResponseCommand(RemotingSysResponseCode.SYSTEM_ERROR, "not set any response code", classHeader);
     }
 
-    /**
-
-     */
-    public static RemotingCommand createResponseCommand(int code, String remark, Class<? extends CommandCustomHeader> classHeader) {
+    public static RemotingCommand createResponseCommand(int code, String remark,
+        Class<? extends CommandCustomHeader> classHeader) {
         RemotingCommand cmd = new RemotingCommand();
         cmd.markResponseType();
         cmd.setCode(code);
@@ -242,7 +231,8 @@ public class RemotingCommand {
         this.customHeader = customHeader;
     }
 
-    public CommandCustomHeader decodeCommandCustomHeader(Class<? extends CommandCustomHeader> classHeader) throws RemotingCommandException {
+    public CommandCustomHeader decodeCommandCustomHeader(
+        Class<? extends CommandCustomHeader> classHeader) throws RemotingCommandException {
         CommandCustomHeader objectHeader;
         try {
             objectHeader = classHeader.newInstance();
@@ -262,11 +252,9 @@ public class RemotingCommand {
                         try {
                             String value = this.extFields.get(fieldName);
                             if (null == value) {
-                                Annotation annotation = getNotNullAnnotation(field);
-                                if (annotation != null) {
+                                if (!isFieldNullable(field)) {
                                     throw new RemotingCommandException("the custom field <" + fieldName + "> is null");
                                 }
-
                                 continue;
                             }
 
@@ -291,6 +279,7 @@ public class RemotingCommand {
                             field.set(objectHeader, valueParsed);
 
                         } catch (Throwable e) {
+                            log.error("Failed field [{}] decoding", fieldName, e);
                         }
                     }
                 }
@@ -314,16 +303,14 @@ public class RemotingCommand {
         return field;
     }
 
-    private Annotation getNotNullAnnotation(Field field) {
-        Annotation annotation = NOT_NULL_ANNOTATION_CACHE.get(field);
-
-        if (annotation == null) {
-            annotation = field.getAnnotation(CFNotNull.class);
-            synchronized (NOT_NULL_ANNOTATION_CACHE) {
-                NOT_NULL_ANNOTATION_CACHE.put(field, annotation);
+    private boolean isFieldNullable(Field field) {
+        if (!NULLABLE_FIELD_CACHE.containsKey(field)) {
+            Annotation annotation = field.getAnnotation(CFNotNull.class);
+            synchronized (NULLABLE_FIELD_CACHE) {
+                NULLABLE_FIELD_CACHE.put(field, annotation == null);
             }
         }
-        return annotation;
+        return NULLABLE_FIELD_CACHE.get(field);
     }
 
     private String getCanonicalName(Class clazz) {
@@ -396,8 +383,8 @@ public class RemotingCommand {
                         try {
                             field.setAccessible(true);
                             value = field.get(this.customHeader);
-                        } catch (IllegalArgumentException e) {
-                        } catch (IllegalAccessException e) {
+                        } catch (Exception e) {
+                            log.error("Failed to access field [{}]", name, e);
                         }
 
                         if (value != null) {
@@ -413,9 +400,6 @@ public class RemotingCommand {
         return encodeHeader(this.body != null ? this.body.length : 0);
     }
 
-    /**
-
-     */
     public ByteBuffer encodeHeader(final int bodyLength) {
         // 1> header length size
         int length = 4;
